@@ -47,43 +47,22 @@ for example:
 
 converted to 
     #define true True
+
+at this stage, we are not checking for errors or unexpected tokens
 */
 void merge_continued_lines(const char *fname, char *content, size_t size)
 {
     char *tmp = NULL, *cptr = content;
     char lcount = 1;  // line count, for readable error messages
-    int is_comment = 0;
 
 BEGIN:
     while(*cptr){
-        if(*cptr == COMMENT_CHAR){
-            is_comment = 1;
-
-            // if the current line is a comment, we check if that comment is continued
-            // if it is, we parse this line and set the is_comment to 1, if the comment
-            // is not continued (we know it if we see \n), then stop persing this line
-            while(*cptr){
-                if(*cptr == LINE_BREAK){
-                    // if we found a line break, but right after that there is another one,
-                    // it means it escape sequance, for example:
-                    // #define foo '\\'
-                    if(*(cptr+1) == LINE_BREAK){
-                        cptr += 2;  // skip 2 because we know the next char is also going to be a line break
-                    } else 
-                        break;
-                }else if(*cptr == '\n'){
-                    is_comment = 0;
-                    cptr++;
-                    lcount++;
-                    goto BEGIN;
-                }
-                cptr++;
-            }
-        } else if(*cptr != LINE_BREAK){
-            if(*cptr == '\n'){
-                is_comment = 0;
+        if(
+            *cptr != LINE_BREAK || 
+            (*cptr == LINE_BREAK && *(cptr + 1) == LINE_BREAK)
+        ){
+            if(*cptr == '\n')
                 lcount++;
-            }
             cptr++;
             continue;
         }
@@ -102,11 +81,9 @@ BEGIN:
                     cptr++;
                     break;
                 default:
-                    // if the current parsed line is not a comment, then its probably code
-                    // that contain \, for example, print("hello\n"), we should stop parse it
-                    if(!is_comment)
-                        goto BEGIN;
-                    die(LOG_ERROR("%s", "unexpected token on line %d (%c)"), fname, lcount, *cptr);
+                    // if we have unexpected char, then its probably a line 
+                    // with an escape char, for example "print('hello world\n')",
+                    goto BEGIN;
             }
         }
 
