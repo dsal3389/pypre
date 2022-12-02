@@ -21,20 +21,6 @@ static inline void * __validate_heap_pointer(void *ptr)
     return ptr;
 }
 
-/*
-print a formatted text to stderrr and quit
-the program with EXIT_FAILURE status code
-*/
-void die(const char *fmt, ...)
-{
-    va_list args;
-
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    exit(EXIT_FAILURE);
-}
-
 void *safe_malloc(size_t size)
 {
     return __validate_heap_pointer(malloc(size));

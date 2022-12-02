@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 
 #include "common.h"
+#include "config.h"
 #include "preprocessor.h"
 #include "utils.h"
 
@@ -19,7 +20,7 @@ void phelp()
         "\n"
         "options:\n"
         "\t-h,--help\tprint this message to screen\n"
-        "\t-k,--keep-comments\tkeep comments on processed files\n"
+        "\t-s,--suppress-warns\tdon't print warning messages\n"
         "\n"
     , progname);
 }
@@ -33,8 +34,8 @@ void parse_args(int *argc, char ***argv, linked_list *entries_buffer)
     while(**argv){
         if(!strcmp(**argv, "-h") || !strcmp(**argv, "--help"))
             phelp();
-        else if(!strcmp(**argv, "-k") || !strcmp(**argv, "--keep-comments"))
-            printf("keep comments options enabled\n");
+        else if(!strcmp(**argv, "-s") || !strcmp(**argv, "--suppress-warns"))
+            global_config.suppress_warns = 1;
         else{
             // if first charachter in the current argument is -, its
             // probably a flag, because there is no file that start with this char

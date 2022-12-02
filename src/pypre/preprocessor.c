@@ -9,10 +9,7 @@
 
 #include "common.h"
 #include "preprocessor.h"
-
-
-#define LINE_BREAK   '\\'
-#define COMMENT_CHAR '#'
+#include "config.h"
 
 
 static char *__mmap_file(const char *path, size_t size)
@@ -58,8 +55,13 @@ void merge_continued_lines(const char *fname, char *content, size_t size)
 BEGIN:
     while(*cptr){
         if(
-            *cptr != LINE_BREAK || 
-            (*cptr == LINE_BREAK && *(cptr + 1) == LINE_BREAK)
+            *cptr != global_config.line_break_char || 
+            // if the current char is "\"" and the next char is also "\"
+            // it meants its an escape seqance "\\"
+            (
+                *cptr == global_config.line_break_char && 
+                *(cptr + 1) == global_config.line_break_char
+            )
         ){
             if(*cptr == '\n')
                 lcount++;
@@ -83,6 +85,9 @@ BEGIN:
                 default:
                     // if we have unexpected char, then its probably a line 
                     // with an escape char, for example "print('hello world\n')",
+                    warn(
+                        LOG_WARN("unexpected char (%c) after line break, on line %d, ignoring"), *cptr, lcount
+                    );
                     goto BEGIN;
             }
         }
@@ -92,7 +97,7 @@ BEGIN:
         // if after the new line the first char is #
         // then we want to include it also in when we delete
         // chars
-        if(*cptr == COMMENT_CHAR)
+        if(*cptr == global_config.preprocess_char)
             cptr++;
 
         // delete all chars from where we found the line break
