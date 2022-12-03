@@ -24,15 +24,14 @@ static char *__mmap_file(const char *path, size_t size)
     return content;
 }
 
-static int __preprocess_entry(const char *ename, struct stat *estat)
+static void __preprocess_entry(const char *ename, struct stat *estat)
 {
-    if(estat->st_mode & S_IFREG)
+    if(estat->st_mode & (S_IFREG | S_IFBLK | S_IFCHR))
         preprocess_file(ename, estat);
     else if(estat->st_mode & S_IFDIR)
         preprocess_directory(ename, estat);
     else
-        return -1;
-    return 0;
+        die(LOG_ERROR("process-entry", "failed to process entry, %s, maybe unsupported filetype"), ename);
 }
 
 /*
@@ -107,13 +106,54 @@ BEGIN:
     }
 }
 
+/* 
+parsing a preprocessor line, a line that starts with global_config.preprocess_char,
+returns a pointer to the end on the line, including the \n
+*/
+char *parse_preprocessor_line(char *token)
+{
+    char *cptr = token;
+
+    while(*cptr && *cptr != '\n'){
+        printf("%c", *cptr);
+        cptr++;
+    }
+    
+    putchar('\n');
+    if(*cptr == '\n')
+        cptr++;
+    return cptr;
+}
+
+/* parsing each line on the given string */
+void parse_string(char *str)
+{
+    char *cptr = str;
+    char *tmp = NULL;
+
+    while(*cptr){
+        if(*cptr != global_config.preprocess_char){
+            cptr++;
+            continue;
+        }
+        
+        tmp = cptr;
+        cptr = parse_preprocessor_line(cptr);
+
+        // delete the whole preprocessor line
+        memmove(tmp, cptr, strlen(cptr) + 1);
+        cptr = tmp;
+    }
+}
+
 void preprocess_file(const char *file_name, struct stat *file_stat)
 {
     char *fcontent = __mmap_file(file_name, file_stat->st_size);
 
     merge_continued_lines(file_name, fcontent, file_stat->st_size);
+    parse_string(fcontent);
 
-    printf("%s:\n%s\n", file_name, fcontent);
+    //printf("%s:\n%s\n", file_name, fcontent);
     munmap(fcontent, file_stat->st_size);
 }
 
@@ -159,9 +199,7 @@ void preprocess_directory(const char *dirname, struct stat *dir_stat)
         // get the current entry stat
         if(stat(path, &entry_stat) == -1)
             die(LOG_ERROR("stat dir-content", "couldn't get %s entry stat"), path);
-
-        if(__preprocess_entry(path, &entry_stat) != 0)
-            die(LOG_ERROR("process-entry", "failed to process entry, %s, maybe unsupported filetype"), path);
+        __preprocess_entry(path, &entry_stat);
     }
 }
 
@@ -169,6 +207,5 @@ void preprocess_entry(const char *ename, struct stat *estat)
 {
     // for now, pass the given entry information to a private function that
     // will handle the entry base on the entry type
-    if(__preprocess_entry(ename, estat) != 0)
-        die(LOG_ERROR("process-entry", "failed to process entry, %s, maybe unsupported filetype"), ename);
+    __preprocess_entry(ename, estat);
 }

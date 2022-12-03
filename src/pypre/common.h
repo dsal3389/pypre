@@ -15,13 +15,13 @@
 
 #define eprintf(...) fprintf(stderr, __VA_ARGS__)
 
-#define warn(...) { \
+#define warn(...) do { \
     if(!global_config.suppress_warns) \
-        eprintf(__VA_ARGS__); }
+        eprintf(__VA_ARGS__); } while(0)
 
-#define die(...) { \
+#define die(...) do { \
     eprintf(__VA_ARGS__); \
-        exit(EXIT_FAILURE);}
+        exit(EXIT_FAILURE);} while(0)
 
 
 extern char *progname;
