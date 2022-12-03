@@ -1,12 +1,17 @@
 # pypre
-pypre is a python preprocessor written in C
+preprocessor written in C, for all languages
 
-## why python preprocessor?
+## why preprocessor for all languages?
 I think the [vision](#vision) section can answer this for now
 
 ## vision
-until now, if we wanted to include some code in a very sepecific circumstances, or make constants, we would have to do it on runtime, for example:
+in my opinion, when i learned C and the preprocessor step, I sounded like the best feature
+that I wished every programming langauge would have, so I decided to create a preprocessor for
+python, but now I see that this code can be applied to any code base.
 
+for now I keep on testing it only on python.
+
+vision example:
 ```py
 MAX_PEOPEL = 30
 
