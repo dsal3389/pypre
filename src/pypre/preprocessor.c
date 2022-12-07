@@ -8,8 +8,10 @@
 #include <dirent.h>
 
 #include "common.h"
+#include "parser.h"
 #include "preprocessor.h"
 #include "config.h"
+#include "utils.h"
 
 
 static char *__mmap_file(const char *path, size_t size)
@@ -26,7 +28,7 @@ static char *__mmap_file(const char *path, size_t size)
 
 static void __preprocess_entry(const char *ename, struct stat *estat)
 {
-    if(estat->st_mode & (S_IFREG | S_IFBLK | S_IFCHR))
+    if(estat->st_mode & S_IFREG)
         preprocess_file(ename, estat);
     else if(estat->st_mode & S_IFDIR)
         preprocess_directory(ename, estat);
@@ -46,7 +48,7 @@ converted to
 
 at this stage, we are not checking for errors or unexpected tokens
 */
-void merge_continued_lines(const char *fname, char *content, size_t size)
+void merge_continued_lines(const char *fname, char *content, size_t *size)
 {
     char *tmp = NULL, *cptr = content;
     char lcount = 1;  // line count, for readable error messages
@@ -54,11 +56,11 @@ void merge_continued_lines(const char *fname, char *content, size_t size)
 BEGIN:
     while(*cptr){
         if(
-            *cptr != global_config.line_break_char || 
+            *cptr != global_config.line_break_char ||
             // if the current char is "\"" and the next char is also "\"
             // it meants its an escape seqance "\\"
             (
-                *cptr == global_config.line_break_char && 
+                //*cptr == global_config.line_break_char && 
                 *(cptr + 1) == global_config.line_break_char
             )
         ){
@@ -99,61 +101,57 @@ BEGIN:
         if(*cptr == global_config.preprocess_char)
             cptr++;
 
+        // update the size of the file, based on the pointers position,
+        // we count how many pointers we advanced, and we subtract the difference 
+        // because we are about to delete those chars
+        *size += tmp - cptr;
+
         // delete all chars from where we found the line break
         // up to the new line, this is the actual merge
-        memmove(tmp, cptr, strlen(cptr) + 1);
+        memmove(tmp, cptr, *size);
         cptr = tmp;
     }
 }
 
-/* 
-parsing a preprocessor line, a line that starts with global_config.preprocess_char,
-returns a pointer to the end on the line, including the \n
-*/
-char *parse_preprocessor_line(char *token)
-{
-    char *cptr = token;
-
-    while(*cptr && *cptr != '\n'){
-        printf("%c", *cptr);
-        cptr++;
-    }
-    
-    putchar('\n');
-    if(*cptr == '\n')
-        cptr++;
-    return cptr;
-}
-
 /* parsing each line on the given string */
-void parse_string(char *str)
+void tokenize_and_parse_text(char *text, size_t *size)
 {
-    char *cptr = str;
-    char *tmp = NULL;
+    char local_text[*size];
+    char *cptr = local_text, *tmp = NULL, token[256];
+
+    // move everything to a local buffer, where we can change the
+    // text without effecting the original
+    strncpy(local_text, text, *size);
 
     while(*cptr){
         if(*cptr != global_config.preprocess_char){
             cptr++;
             continue;
         }
-        
-        tmp = cptr;
-        cptr = parse_preprocessor_line(cptr);
 
-        // delete the whole preprocessor line
-        memmove(tmp, cptr, strlen(cptr) + 1);
-        cptr = tmp;
+        tmp = cptr;
+        cptr++;
+
+        while(*cptr == ' ' || *cptr == '\t')
+            cptr++;
+        
+        if(*cptr == '\n' || *cptr == 0)
+            break;
+
+        // TODO: think about elegant way to take 
+        // the token after the preprocess_char was found
     }
 }
 
 void preprocess_file(const char *file_name, struct stat *file_stat)
 {
     char *fcontent = __mmap_file(file_name, file_stat->st_size);
+    size_t size = file_stat->st_size;
 
-    merge_continued_lines(file_name, fcontent, file_stat->st_size);
-    parse_string(fcontent);
+    merge_continued_lines(file_name, fcontent, &size);
+    tokenize_and_parse_text(fcontent, &size);
 
-    //printf("%s:\n%s\n", file_name, fcontent);
+    printf("%s:\n%s\n", file_name, fcontent);
     munmap(fcontent, file_stat->st_size);
 }
 
@@ -187,8 +185,7 @@ void preprocess_directory(const char *dirname, struct stat *dir_stat)
         // safe file/folder names that should not be processed
         if(
             !strcmp(dir_entry->d_name, ".") ||
-            !strcmp(dir_entry->d_name, "..") ||
-            !strcmp(dir_entry->d_name, "__pycache__")
+            !strcmp(dir_entry->d_name, "..")
         )
             continue;
 
