@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -29,7 +30,7 @@ void phelp()
 parse the program argc, argv, also add all the unknown argv options
 to the given entires_buffer, assuming those are filenames
 */
-void parse_args(int *argc, char ***argv, linked_list *entries_buffer)
+void parse_args(int *argc, char ***argv, struct strbuf_list *entries_buffer)
 {
     while(**argv){
         if(!strcmp(**argv, "-h") || !strcmp(**argv, "--help"))
@@ -44,46 +45,69 @@ void parse_args(int *argc, char ***argv, linked_list *entries_buffer)
 
             // add the current argument to he entries buffer, because it doesn't
             // look like an option, add to the size +1 for the null terminator
-            add_entry(entries_buffer, **argv, strlen(**argv) + 1);
+            strbuf_list_append(entries_buffer, **argv);
         }
         (*argv)++;
         (*argc)--;
     }
 }
 
-int run_on_entries(linked_list *entries)
+/*
+read data from stdin and parse the text, all the parsed
+text will be written to stdout
+*/
+int run_on_stdin()
 {
-    link_entry *entry = entries->head;
+    char c;
+    struct strbuf input = STRBUF_INIT;
+
+    while((c = getchar()) != EOF)
+        strbuf_append_char(&input, c);
+
+    preprocess_text(input.buf, &input.length);
+    printf("%s", input.buf);
+    strbuf_free(&input);
+    return 0;
+}
+
+/*
+run the preprocessor on the given entries, those entries
+can be files or directories
+*/
+int run_on_entries(struct strbuf_list *entries)
+{
+    struct strbuf *strbuf = NULL;
     struct stat estat;
 
-    while(entry){
-        if(stat((char *) entry->value, &estat) != 0)
-            die(LOG_ERROR("stat", "couldn't get information for file named %s"), (char *) entry->value);
-        preprocess_entry((char *) entry->value, &estat);
-        entry=entry->next;
+    for(int i=0; i<entries->count; i++){
+        strbuf = entries->strings[i];
+
+        if(stat(strbuf->buf, &estat) != 0)
+            die(LOG_ERROR("stat", "couldn't get information for file named %s"), strbuf->buf);
+        preprocess_entry(strbuf, &estat);
     }
     return 0;
 }
 
 int main(int argc, char **argv)
 {
-    linked_list entry_names = LINKED_LIST_INIT;
+    struct strbuf_list entry_names = STRBUF_LIST_INIT;
     int results = 0;
 
     progname = argv[0];
     argv++;
     argc--;
 
-    if(argc == 0)
-        pusage();
-
-    parse_args(&argc,  &argv, &entry_names);
+    if(argc != 0)
+        parse_args(&argc,  &argv, &entry_names);
+    config_init();
 
     // no files were passed to the program
     if(entry_names.count == 0)
-        pusage();
+        results = run_on_stdin();
+    else
+        results = run_on_entries(&entry_names);
 
-    results = run_on_entries(&entry_names);
-    free_list_entries(&entry_names);
+    strbuf_list_free(&entry_names);
     return results;
 }

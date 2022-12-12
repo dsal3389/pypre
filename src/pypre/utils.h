@@ -4,26 +4,33 @@
 #include <stdlib.h>
 
 
-#define LINKED_LIST_INIT {.count=0, .head=NULL, .tail=NULL}
+#define STRBUF_INCREASE_CHUNK_SIZE 64
+
+#define STRBUF_INIT { .capacity=0, .length=0, .buf=NULL }
+#define STRBUF_LIST_INIT { .capacity=0, .count=0, .strings=NULL }
 
 
-typedef struct _link_entry{
-    struct _link_entry *prev;
-    struct _link_entry *next;
-    unsigned long value_size;  // value byte size
-    void *value;
-} link_entry;
+struct strbuf{
+    size_t capacity;
+    size_t length;
+    char *buf;
+};
 
-typedef struct {
-    unsigned long count;
-    link_entry *head;
-    link_entry *tail;
-} linked_list;
+struct strbuf_list{
+    size_t capacity;
+    size_t count;
+    struct strbuf **strings;
+};
 
 
-extern void add_entry(linked_list *, void *, size_t);
-extern void delete_entry(linked_list *, link_entry *);
-extern void free_list_entries(linked_list *);
+extern void strbuf_set(struct strbuf *, const char *);
+extern void strbuf_append(struct strbuf *, const char *);
+extern void strbuf_append_char(struct strbuf *, int);
+extern void strbuf_replace(struct strbuf *, long, const char *);
+extern void strbuf_free(struct strbuf *);
+
+extern void strbuf_list_append(struct strbuf_list *, const char *);
+extern void strbuf_list_free(struct strbuf_list *);
 
 
 #endif

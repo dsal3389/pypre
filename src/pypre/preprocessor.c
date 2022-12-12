@@ -7,33 +7,36 @@
 #include <fcntl.h>
 #include <dirent.h>
 
-#include "common.h"
-#include "parser.h"
 #include "preprocessor.h"
+#include "common.h"
 #include "config.h"
+#include "token.h"
 #include "utils.h"
 
 
 static char *__mmap_file(const char *path, size_t size)
 {
-    char *content = NULL;
     int fd = open(path, O_RDWR);
+    char *content = NULL;
 
     if(fd == -1)
         die(LOG_ERRNO("open"));
+
     content = (char *) safe_mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
     close(fd);
     return content;
 }
 
-static void __preprocess_entry(const char *ename, struct stat *estat)
+static void __preprocess_entry(struct strbuf *entry_name, struct stat *estat)
 {
     if(estat->st_mode & S_IFREG)
-        preprocess_file(ename, estat);
+        preprocess_file(entry_name, estat);
+    else if(estat->st_mode & S_IFLNK)
+        preprocess_file(entry_name, estat);
     else if(estat->st_mode & S_IFDIR)
-        preprocess_directory(ename, estat);
+        preprocess_directory(entry_name, estat);
     else
-        die(LOG_ERROR("process-entry", "failed to process entry, %s, maybe unsupported filetype"), ename);
+        die(LOG_ERROR("process-entry", "failed to process entry, %s, maybe unsupported filetype"), entry_name->buf);
 }
 
 /*
@@ -48,7 +51,7 @@ converted to
 
 at this stage, we are not checking for errors or unexpected tokens
 */
-void merge_continued_lines(const char *fname, char *content, size_t *size)
+void merge_continued_lines(char *content, size_t *size)
 {
     char *tmp = NULL, *cptr = content;
     char lcount = 1;  // line count, for readable error messages
@@ -56,13 +59,10 @@ void merge_continued_lines(const char *fname, char *content, size_t *size)
 BEGIN:
     while(*cptr){
         if(
-            *cptr != global_config.line_break_char ||
             // if the current char is "\"" and the next char is also "\"
             // it meants its an escape seqance "\\"
-            (
-                //*cptr == global_config.line_break_char && 
-                *(cptr + 1) == global_config.line_break_char
-            )
+            *cptr != global_config.line_break_char ||
+            *(cptr + 1) == global_config.line_break_char
         ){
             if(*cptr == '\n')
                 lcount++;
@@ -95,7 +95,8 @@ BEGIN:
 
         cptr++;
         lcount++;
-        // if after the new line the first char is #
+
+        // if after the new line the first char is `global_config.preprocess_char`
         // then we want to include it also in when we delete
         // chars
         if(*cptr == global_config.preprocess_char)
@@ -113,96 +114,119 @@ BEGIN:
     }
 }
 
+void parse_token(const char *token)
+{
+    handle_token(token);
+    //printf("parsing token %s\n", token);
+}
+
+void tokenize_and_parse_line(char *line)
+{
+    char *token = NULL, *token_buffer = NULL;
+    int is_preprocessor_line = 0;
+
+    token = strtok_r(line, " ", &token_buffer);
+
+    if(*token == global_config.preprocess_char){
+        is_preprocessor_line = 1;
+
+        // if we are currently in a preprocessor line (a line that starts with `global_config.preprocess_char`)
+        // then we skip the first char, which should be the `global_config.preprocess_char`
+        token++;
+
+        // if its the end of the string, then get the next token in the line,
+        // this can accoure when we have space after the `global_config.preprocess_char`,
+        // for example: # define HELLO "hello"
+        //               ^ this space
+        if(*token == 0)
+            token = strtok_r(NULL, " ", &token_buffer);
+    }
+
+    if(is_preprocessor_line)
+        parse_token(token);
+    // printf("token %s\n", token);
+}
+
 /* parsing each line on the given string */
 void tokenize_and_parse_text(char *text, size_t *size)
 {
-    char local_text[*size];
-    char *cptr = local_text, *tmp = NULL, token[256];
+    char *line, *line_buffer, *ptr;
 
-    // move everything to a local buffer, where we can change the
-    // text without effecting the original
-    strncpy(local_text, text, *size);
-
-    while(*cptr){
-        if(*cptr != global_config.preprocess_char){
-            cptr++;
-            continue;
-        }
-
-        tmp = cptr;
-        cptr++;
-
-        while(*cptr == ' ' || *cptr == '\t')
-            cptr++;
-        
-        if(*cptr == '\n' || *cptr == 0)
+    // we parse each line seperatly and pass it to a function
+    // that will tokenize and parse each word in the line
+    for(ptr=text; ; ptr=NULL){
+        line = strtok_r(ptr, "\n", &line_buffer);
+        if(line == NULL)
             break;
 
-        // TODO: think about elegant way to take 
-        // the token after the preprocess_char was found
+        tokenize_and_parse_line(line);
     }
 }
 
-void preprocess_file(const char *file_name, struct stat *file_stat)
+void preprocess_text(char *text, size_t *size)
 {
-    char *fcontent = __mmap_file(file_name, file_stat->st_size);
+    merge_continued_lines(text, size);
+    tokenize_and_parse_text(text, size);
+}
+
+void preprocess_file(struct strbuf *filename, struct stat *file_stat)
+{
+    char *fcontent = __mmap_file(filename->buf, file_stat->st_size);
     size_t size = file_stat->st_size;
 
-    merge_continued_lines(file_name, fcontent, &size);
-    tokenize_and_parse_text(fcontent, &size);
-
-    printf("%s:\n%s\n", file_name, fcontent);
+   // preprocess_text(fcontent, &size);
+   // printf("%s\n", file_name);
+    printf("%s:\n%s\n", filename->buf, fcontent);
     munmap(fcontent, file_stat->st_size);
 }
 
-void preprocess_directory(const char *dirname, struct stat *dir_stat)
+void preprocess_directory(struct strbuf *path, struct stat *dir_stat)
 {
-    char path[PATH_MAX], *path_post_suffix = NULL;
+    size_t base_path_len = 0;
     struct dirent *dir_entry;
     struct stat entry_stat;  // contains the current dir_entry stat
-    DIR *dirp = opendir(dirname);
+    DIR *dirp = opendir(path->buf);
 
     if(dirp == NULL)
         die(LOG_ERRNO("opendir"));
 
     // the first entry in the path must be the current
     // directory name
-    strncpy(path, dirname, sizeof(path));
-
-    // get the address after the current directory name
-    // in the path variable, path: "foo/ "
-    //                                  ^ we are here
-    path_post_suffix = &path[strlen(path)];
+    // strbuf_set(&path, dirname->buf);
 
     // if the dirname doesn't end with a slash, add it
     // /foo/foo -> /foo/foo/
-    if(*(path_post_suffix-1) != '/'){
-        *path_post_suffix = '/';
-        path_post_suffix++;
-    }
+    if(path->buf[path->length-1] != '/')
+        strbuf_append_char(path, '/');
+
+    // we save the length of the current path because
+    // later we are going to append to this string from this
+    // saved index
+    base_path_len = path->length;
 
     while((dir_entry=readdir(dirp))){
         // safe file/folder names that should not be processed
         if(
             !strcmp(dir_entry->d_name, ".") ||
-            !strcmp(dir_entry->d_name, "..")
+            !strcmp(dir_entry->d_name, "..") ||
+            is_in_preignore(dir_entry->d_name)
         )
             continue;
 
         // we add the current entry name to the dirname at path
-        // dirname/ + dir_entry->d_name
-        strncpy(path_post_suffix, dir_entry->d_name, sizeof(path) - strlen(dirname));
+        // base_dirname/ + dir_entry->d_name
+        strbuf_replace(path, base_path_len, dir_entry->d_name);
 
         // get the current entry stat
-        if(stat(path, &entry_stat) == -1)
-            die(LOG_ERROR("stat dir-content", "couldn't get %s entry stat"), path);
+        if(stat(path->buf, &entry_stat) == -1)
+            die(LOG_ERROR("stat dir-content", "couldn't get %s entry stat"), path->buf);
         __preprocess_entry(path, &entry_stat);
     }
 }
 
-void preprocess_entry(const char *ename, struct stat *estat)
+void preprocess_entry(struct strbuf *entry_name, struct stat *estat)
 {
     // for now, pass the given entry information to a private function that
     // will handle the entry base on the entry type
-    __preprocess_entry(ename, estat);
+    __preprocess_entry(entry_name, estat);
 }

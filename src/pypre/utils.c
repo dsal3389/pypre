@@ -1,70 +1,117 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
-#include "common.h"
 #include "utils.h"
+#include "common.h"
 
 
-void add_entry(linked_list *lls, void *value, size_t size)
+static void inline __strbuf_increase(struct strbuf *strbuf, size_t size)
 {
-    link_entry *entry = (link_entry *) safe_calloc(1, sizeof(link_entry));
-    entry->value_size = size;
-    entry->value = safe_malloc(size);
+    if(size == 0)
+        // it is better to add more memory if we know we are going
+        // to need more then the default chunk size, so we wont
+        // have to allocate memory everytime
+        size = STRBUF_INCREASE_CHUNK_SIZE;
 
-    // copy the value to allocated memory, so if the given
-    // value pointer is defined on a stack frame, and the stack frame is
-    // poped, then it wont break the program
-    memcpy(entry->value, value, size);
-    lls->count++;
+    strbuf->capacity += size; 
+    strbuf->buf = safe_realloc(strbuf->buf, strbuf->capacity);
+}
+
+void strbuf_set(struct strbuf *strbuf, const char *str)
+{
+    size_t str_len = strlen(str);
+
+    if(str_len >= strbuf->capacity)
+        __strbuf_increase(strbuf, 0);
+
+    strncpy(strbuf->buf, str, str_len);
+    strbuf->length = str_len;
+}
+
+void strbuf_append(struct strbuf *strbuf, const char *str)
+{
+    size_t str_len = strlen(str);
+
+    if((strbuf->capacity - strbuf->length) < str_len)
+        __strbuf_increase(strbuf, str_len);
+
+    strbuf->length += str_len;
+    strncat(strbuf->buf, str, strbuf->length);
+}
+
+void strbuf_append_char(struct strbuf *strbuf, int c)
+{
+    if((strbuf->capacity - strbuf->length) < 1)
+        __strbuf_increase(strbuf, 0);
+
+    strbuf->buf[strbuf->length++] = c;
+    strbuf->buf[strbuf->length] = 0;
+
+}
+
+void strbuf_replace(struct strbuf *strbuf, long index, const char *str)
+{
+    if(strbuf->length < index)
+        return;
+        
+    size_t replace_str_len = 0;
+    size_t str_len = strlen(str);
+    char *replace_str = &(strbuf->buf[index]);
+
+    if(*replace_str != 0)
+        replace_str_len = strlen(replace_str);
+
+    if(
+        str_len > replace_str_len && 
+        (strbuf->capacity - strbuf->length) < (str_len - replace_str_len)
+    )
+        __strbuf_increase(strbuf, (str_len - replace_str_len));
+
+    if(str_len > replace_str_len)
+        strbuf->length += (str_len - replace_str_len);
+    else
+        strbuf->length += (replace_str_len - str_len);
     
-    // if head is NULL, then there are no items on the
-    // list, define the current entry as head
-    if(lls->head == NULL){
-        lls->head = entry;
-        lls->tail = entry;
-        entry->next = NULL;
-        entry->prev = NULL;
-    } else {
-        entry->prev = lls->tail;
-        lls->tail->next = entry;
-        lls->tail = entry;
-    }
+    // add extra one, to copy also the null terminator
+    strncpy(replace_str, str, str_len + 1);
 }
 
-void delete_entry(linked_list *lls, link_entry *entry)
+void strbuf_free(struct strbuf *strbuf)
 {
-    if(lls->head == entry)
-        lls->head = entry->next;
-    if(lls->tail == entry)
-        lls->tail = entry->prev;
-    if(entry->next)
-        entry->next->prev = entry->prev;
-    if(entry->prev)
-        entry->prev->next = entry->next;
-}
-
-void free_list_entries(linked_list *lls)
-{
-    // if lls head is NULL, it means 
-    // there are no values in the list 
-    if(lls->head == NULL)
+    if(strbuf->capacity == 0)
         return;
 
-    link_entry *entry = lls->head;
-    link_entry *tmp = NULL;
-    
-    while(entry){
-        // we remember the pointer to the next
-        // entry, because later we gonna free the entry
-        // and we wont have access to that data
-        tmp = entry->next;
-        
-        free(entry->value);
-        free(entry);
-        entry = tmp;
-    }
+    strbuf->length = 0;
+    strbuf->capacity = 0;
+    free(strbuf->buf);
+}
 
-    lls->head = NULL;
-    lls->tail = NULL;
-    lls->count = 0;
+void strbuf_list_append(struct strbuf_list *strls, const char *str)
+{
+    struct strbuf **strbuf;
+
+    // if capacity is equal to count it means the list
+    // have no move space, we need to allocate more space
+    if(strls->capacity == strls->count){
+        strls->capacity += 5;
+        strls->strings = safe_realloc(strls->strings, strls->capacity * sizeof(char *));
+    }  
+
+    // get the last index (also increase count), allocate memory for
+    // the new strbuf and set its inital value
+    strbuf = &strls->strings[strls->count++];
+    *strbuf = (struct strbuf*) safe_calloc(1, sizeof(struct strbuf));
+    strbuf_set(*strbuf, str);
+}
+
+void strbuf_list_free(struct strbuf_list *strls)
+{
+    for(int i=0; i<strls->count; i++)
+        strbuf_free(strls->strings[i]);
+        
+    strls->count = 0;
+    strls->capacity = 0;
+    free(strls->strings);
 }
