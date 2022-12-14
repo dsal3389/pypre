@@ -59,15 +59,17 @@ void merge_continued_lines(char *content, size_t *size)
 
 BEGIN:
     while(*cptr){
-        if(
-            // if the current char is "\"" and the next char is also "\"
-            // it meants its an escape seqance "\\"
-            *cptr != global_config.line_break_char ||
-            *(cptr + 1) == global_config.line_break_char
-        ){
+        if(*cptr != global_config.line_break_char){
             if(*cptr == '\n')
                 lcount++;
             cptr++;
+            continue;
+        }
+
+        // if the current char is "\"" and the next char is also "\"
+        // it meants its an escape seqance "\\"
+        if(*(cptr + 1) == global_config.line_break_char){
+            cptr += 2;
             continue;
         }
 
@@ -158,7 +160,7 @@ void tokenize_and_parse_text(char *text, size_t *size)
 void preprocess_text(char *text, size_t *size)
 {
     merge_continued_lines(text, size);
-    tokenize_and_parse_text(text, size);
+    //tokenize_and_parse_text(text, size);
 }
 
 void preprocess_file(struct strbuf *filename, struct stat *file_stat)
