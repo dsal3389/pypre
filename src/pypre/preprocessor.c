@@ -54,7 +54,8 @@ at this stage, we are not checking for errors or unexpected tokens
 void merge_continued_lines(char *content, size_t *size)
 {
     char *tmp = NULL, *cptr = content;
-    char lcount = 1;  // line count, for readable error messages
+    size_t mmove_count = 0;
+    size_t lcount = 1;  // line count, for readable error messages
 
 BEGIN:
     while(*cptr){
@@ -87,7 +88,9 @@ BEGIN:
                     // if we have unexpected char, then its probably a line 
                     // with an escape char, for example "print('hello world\n')",
                     warn(
-                        LOG_WARN("unexpected char (%c) after line break, on line %d, ignoring"), *cptr, lcount
+                        LOG_WARN(
+                            "merge continued lines", 
+                            "unexpected char (%c) after line break, on line %ld, ignoring"), *cptr, lcount
                     );
                     goto BEGIN;
             }
@@ -102,49 +105,38 @@ BEGIN:
         if(*cptr == global_config.preprocess_char)
             cptr++;
 
-        // update the size of the file, based on the pointers position,
-        // we count how many pointers we advanced, and we subtract the difference 
-        // because we are about to delete those chars
+
+        // count how many bytes we need to move, by calculating
+        // how many chars we count so far and subtract it from the 
+        // current size, for example 15 - (0 - 10) = 5, + 1 for null terminator
+        mmove_count = *size - (cptr - content) + 1;
+
+        // update the size, what is the length of what we are trying
+        // to delete and add it to the size, for example
+        // 10 + (2 - 5) = 7
         *size += tmp - cptr;
 
         // delete all chars from where we found the line break
         // up to the new line, this is the actual merge
-        memmove(tmp, cptr, *size);
+        memmove(tmp, cptr, mmove_count);
         cptr = tmp;
     }
 }
 
-void parse_token(const char *token)
-{
-    handle_token(token);
-    //printf("parsing token %s\n", token);
-}
-
 void tokenize_and_parse_line(char *line)
 {
-    char *token = NULL, *token_buffer = NULL;
-    int is_preprocessor_line = 0;
+    struct strbuf token = STRBUF_INIT;
+    char *track = line;
 
-    token = strtok_r(line, " ", &token_buffer);
-
-    if(*token == global_config.preprocess_char){
-        is_preprocessor_line = 1;
-
-        // if we are currently in a preprocessor line (a line that starts with `global_config.preprocess_char`)
-        // then we skip the first char, which should be the `global_config.preprocess_char`
-        token++;
-
-        // if its the end of the string, then get the next token in the line,
-        // this can accoure when we have space after the `global_config.preprocess_char`,
-        // for example: # define HELLO "hello"
-        //               ^ this space
-        if(*token == 0)
-            token = strtok_r(NULL, " ", &token_buffer);
+    printf("processing %s\n", line);
+    for(;;){
+        track = get_next_word(&token, track);
+        if(track == NULL)
+            break;
+        printf("\ttoken: %s\n", token.buf);
     }
-
-    if(is_preprocessor_line)
-        parse_token(token);
-    // printf("token %s\n", token);
+    putchar('\n');
+    strbuf_free(&token);
 }
 
 /* parsing each line on the given string */
@@ -174,8 +166,8 @@ void preprocess_file(struct strbuf *filename, struct stat *file_stat)
     char *fcontent = __mmap_file(filename->buf, file_stat->st_size);
     size_t size = file_stat->st_size;
 
-   // preprocess_text(fcontent, &size);
-   // printf("%s\n", file_name);
+
+    preprocess_text(fcontent, &size);
     printf("%s:\n%s\n", filename->buf, fcontent);
     munmap(fcontent, file_stat->st_size);
 }
@@ -189,10 +181,6 @@ void preprocess_directory(struct strbuf *path, struct stat *dir_stat)
 
     if(dirp == NULL)
         die(LOG_ERRNO("opendir"));
-
-    // the first entry in the path must be the current
-    // directory name
-    // strbuf_set(&path, dirname->buf);
 
     // if the dirname doesn't end with a slash, add it
     // /foo/foo -> /foo/foo/

@@ -27,6 +27,7 @@ void strbuf_set(struct strbuf *strbuf, const char *str)
         __strbuf_increase(strbuf, 0);
 
     strncpy(strbuf->buf, str, str_len);
+    strbuf->buf[str_len] = 0;
     strbuf->length = str_len;
 }
 
@@ -114,4 +115,53 @@ void strbuf_list_free(struct strbuf_list *strls)
     strls->count = 0;
     strls->capacity = 0;
     free(strls->strings);
+}
+
+/*
+reads the first work in the given text and stores it into
+the buffer, the function returns a pointer to the end of the found word
+in the given text, usage example:
+
+    char line[] = "Hello world",
+    char *ptr = line;
+    struct strbuf word;
+
+    while(ptr != NULL){
+        ptr = get_next_word(&word, ptr);
+        printf("word %s\n", word->buf);
+    }
+*/
+char *get_next_word(struct strbuf *strbuf, char *text)
+{
+    char *start = NULL, *end = text;
+    char tmp_c;
+
+    while(!isalpha(*end)){
+        // if we didn't find any letter char until now, and we got to
+        // the end of the string, then it means the given text does not
+        // contain any word
+        if(*end == 0)
+            return NULL;
+        end++;
+    }
+
+    // record the start of the word
+    start = end;
+    while(isalpha(*end))
+        end++;
+
+    // remember the current end char for later,
+    // we set the null terminator so `strbuf_set` will only add the found
+    // word, after that we place the `tmp_c` back
+    tmp_c = *end;
+    *end = 0;
+    strbuf_set(strbuf, start);
+
+    // if the end of the word is NULL terminator, then
+    // it means we reached the end of the text
+    if(tmp_c == 0)
+        return NULL;
+
+    *end = tmp_c;
+    return end;
 }

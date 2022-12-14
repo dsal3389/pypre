@@ -9,9 +9,11 @@
 #include "config.h"
 
 
-#define LOG_ERROR(op, message) op "::" message "\n"
-#define LOG_ERRNO(op) LOG_ERROR(op, "%s"), strerror(errno)
-#define LOG_WARN(message) "warning::" message "\n"
+#define LOG_FORMAT(prefix, type, message) prefix ": " type ": " message "\n"
+#define LOG_ERROR(prefix, message) LOG_FORMAT(prefix, "error", message)
+#define LOG_ERRNO(prefix) LOG_ERROR(prefix, "%s"), strerror(errno)
+#define LOG_WARN(prefix, message) LOG_FORMAT(prefix, "warning", message)
+#define LOG_NOTE(prefix, message) LOG_FORMAT(prefix, "note", message)
 
 #define eprintf(...) fprintf(stderr, __VA_ARGS__)
 
@@ -23,11 +25,12 @@
     eprintf(__VA_ARGS__); \
         exit(EXIT_FAILURE);} while(0)
 
+#define note(...) printf(__VA_ARGS__)
+
 
 extern char *progname;
 
 
-//extern void die(const char *, ...);
 extern void *safe_malloc(size_t);
 extern void *safe_calloc(size_t, size_t);
 extern void *safe_realloc(void *, size_t);

@@ -32,5 +32,6 @@ extern void strbuf_free(struct strbuf *);
 extern void strbuf_list_append(struct strbuf_list *, const char *);
 extern void strbuf_list_free(struct strbuf_list *);
 
+extern char *get_next_word(struct strbuf *, char *);
 
 #endif
