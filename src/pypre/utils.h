@@ -25,8 +25,11 @@ struct strbuf_list{
 
 extern void strbuf_set(struct strbuf *, const char *);
 extern void strbuf_append(struct strbuf *, const char *);
+extern void strbuf_push(struct strbuf *, const char *);
+extern void strbuf_push_char(struct strbuf *, int);
 extern void strbuf_append_char(struct strbuf *, int);
 extern void strbuf_replace(struct strbuf *, long, const char *);
+extern void strbuf_delete(struct strbuf *, size_t, size_t);
 extern void strbuf_free(struct strbuf *);
 
 extern void strbuf_list_append(struct strbuf_list *, const char *);

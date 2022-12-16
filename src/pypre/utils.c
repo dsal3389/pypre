@@ -24,7 +24,7 @@ void strbuf_set(struct strbuf *strbuf, const char *str)
     size_t str_len = strlen(str);
 
     if(str_len >= strbuf->capacity)
-        __strbuf_increase(strbuf, 0);
+        __strbuf_increase(strbuf, str_len*2);
 
     strncpy(strbuf->buf, str, str_len);
     strbuf->buf[str_len] = 0;
@@ -42,14 +42,39 @@ void strbuf_append(struct strbuf *strbuf, const char *str)
     strncat(strbuf->buf, str, strbuf->length);
 }
 
+void strbuf_push(struct strbuf *strbuf, const char *str)
+{
+    size_t str_len = strlen(str);
+
+    if((strbuf->capacity - strbuf->length) < str_len)
+        __strbuf_increase(strbuf, str_len);
+
+    // pust the current chars in the buffer X bytes
+    memmove(&strbuf->buf[str_len], strbuf->buf, strbuf->length + 1);
+
+    // update the length and copy the given string
+    // to the start of the buffer, where we pushed the chars
+    strncpy(strbuf->buf, str, str_len);
+    strbuf->length += str_len;
+}
+
+void strbuf_push_char(struct strbuf *strbuf, int c)
+{
+    if(strbuf->capacity >= strbuf->length)
+        __strbuf_increase(strbuf, 16);
+
+    memmove(strbuf->buf+1, strbuf->buf, strbuf->length + 1);
+    strbuf->length++;
+    *strbuf->buf = c;
+}
+
 void strbuf_append_char(struct strbuf *strbuf, int c)
 {
-    if((strbuf->capacity - strbuf->length) < 1)
-        __strbuf_increase(strbuf, 0);
+    if(strbuf->capacity >= strbuf->length)
+        __strbuf_increase(strbuf, 16);
 
     strbuf->buf[strbuf->length++] = c;
     strbuf->buf[strbuf->length] = 0;
-
 }
 
 void strbuf_replace(struct strbuf *strbuf, long index, const char *str)
@@ -65,7 +90,7 @@ void strbuf_replace(struct strbuf *strbuf, long index, const char *str)
         replace_str_len = strlen(replace_str);
 
     if(
-        str_len > replace_str_len && 
+        //str_len > replace_str_len && 
         (strbuf->capacity - strbuf->length) < (str_len - replace_str_len)
     )
         __strbuf_increase(strbuf, (str_len - replace_str_len));
@@ -77,6 +102,21 @@ void strbuf_replace(struct strbuf *strbuf, long index, const char *str)
     
     // add extra one, to copy also the null terminator
     strncpy(replace_str, str, str_len + 1);
+}
+
+void strbuf_delete(struct strbuf *strbuf, size_t start, size_t count)
+{
+    if(
+        strbuf->length < start || 
+        strbuf->length < (start + count)
+    )
+        return;
+
+    char *start_str = &strbuf->buf[start];
+    char *end_str = start_str + count;
+    strbuf->length -= count;
+    
+    memmove(start_str, end_str, strbuf->length + 1);
 }
 
 void strbuf_free(struct strbuf *strbuf)
@@ -136,7 +176,7 @@ char *get_next_word(struct strbuf *strbuf, char *text)
     char *start = NULL, *end = text;
     char tmp_c;
 
-    while(!isalpha(*end)){
+    while(*end == ' '){
         // if we didn't find any letter char until now, and we got to
         // the end of the string, then it means the given text does not
         // contain any word
@@ -147,9 +187,22 @@ char *get_next_word(struct strbuf *strbuf, char *text)
 
     // record the start of the word
     start = end;
-    while(isalpha(*end))
-        end++;
 
+    // read until we meat a seperator, then it
+    // means we got to the end of the word
+    while(*end){
+        switch(*end){
+            case '\n':
+            case '\t':
+            case ' ':
+                goto LOOP_OUT;
+            default:
+                break;
+        }
+        end++;
+    }
+
+LOOP_OUT:
     // remember the current end char for later,
     // we set the null terminator so `strbuf_set` will only add the found
     // word, after that we place the `tmp_c` back

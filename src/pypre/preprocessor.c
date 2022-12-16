@@ -51,7 +51,7 @@ converted to
 
 at this stage, we are not checking for errors or unexpected tokens
 */
-void merge_continued_lines(char *content, size_t *size)
+void merge_continued_lines(const char *filename, char *content, size_t *size)
 {
     char *tmp = NULL, *cptr = content;
     size_t mmove_count = 0;
@@ -91,8 +91,8 @@ BEGIN:
                     // with an escape char, for example "print('hello world\n')",
                     warn(
                         LOG_WARN(
-                            "merge continued lines", 
-                            "unexpected char (%c) after line break, on line %ld, ignoring"), *cptr, lcount
+                            "%s", "\n\tunexpected char (%c) after line break on line %ld, not merging line\n"
+                        ), filename, *cptr, lcount
                     );
                     goto BEGIN;
             }
@@ -127,40 +127,56 @@ BEGIN:
 
 void tokenize_and_parse_line(char *line)
 {
-    struct strbuf token = STRBUF_INIT;
+    struct strbuf token_str = STRBUF_INIT;
+    struct token *token = NULL;
+    int preprocessor_line = 0;
     char *track = line;
 
-    printf("processing %s\n", line);
-    for(;;){
-        track = get_next_word(&token, track);
-        if(track == NULL)
-            break;
-        printf("\ttoken: %s\n", token.buf);
+    if((track=get_next_word(&token_str, track)) == NULL)
+        goto FUNC_END;
+    
+    if(*token_str.buf == global_config.preprocess_char){
+        strbuf_delete(&token_str, 0, 1);
+        preprocessor_line = 1;
     }
-    putchar('\n');
-    strbuf_free(&token);
+    
+    if(token_str.length == 0)
+        if((track=get_next_word(&token_str, track)) == NULL)
+            goto FUNC_END;
+    
+    if(get_token(token_str.buf) == NULL)
+        goto FUNC_END;
+
+    handle_token(token, line);
+
+FUNC_END:
+    strbuf_free(&token_str);
 }
 
-/* parsing each line on the given string */
-void tokenize_and_parse_text(char *text, size_t *size)
+void preprocess_text(const char *filename, char *text, size_t *size)
 {
-    char *line, *line_buffer, *ptr;
+    struct strbuf output_path = STRBUF_INIT;
+    merge_continued_lines(filename, text, size);
 
+    // create the output path string, the format should be like so
+    // ./<output dirname>/<filename>
+    strbuf_set(&output_path, "./");
+    strbuf_append(&output_path, global_config.output_dirname);
+    strbuf_append_char(&output_path, '/');
+    strbuf_append(&output_path, filename);
+
+    printf("output path %s (%ld)\n", output_path.buf, output_path.length);
+    char *line, *line_buffer, *ptr;
     // we parse each line seperatly and pass it to a function
     // that will tokenize and parse each word in the line
-    for(ptr=text; ; ptr=NULL){
-        line = strtok_r(ptr, "\n", &line_buffer);
-        if(line == NULL)
-            break;
+    // for(ptr=text; ; ptr=NULL){
+    //     line = strtok_r(ptr, "\n", &line_buffer);
+    //     if(line == NULL)
+    //         break;
 
-        tokenize_and_parse_line(line);
-    }
-}
-
-void preprocess_text(char *text, size_t *size)
-{
-    merge_continued_lines(text, size);
-    //tokenize_and_parse_text(text, size);
+    //     tokenize_and_parse_line(line);
+    // }
+    strbuf_free(&output_path);
 }
 
 void preprocess_file(struct strbuf *filename, struct stat *file_stat)
@@ -168,8 +184,7 @@ void preprocess_file(struct strbuf *filename, struct stat *file_stat)
     char *fcontent = __mmap_file(filename->buf, file_stat->st_size);
     size_t size = file_stat->st_size;
 
-
-    preprocess_text(fcontent, &size);
+    preprocess_text(filename->buf, fcontent, &size);
     printf("%s:\n%s\n", filename->buf, fcontent);
     munmap(fcontent, file_stat->st_size);
 }

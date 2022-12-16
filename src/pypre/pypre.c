@@ -22,6 +22,7 @@ void phelp()
         "options:\n"
         "\t-h,--help\tprint this message to screen\n"
         "\t-s,--suppress-warns\tdon't print warning messages\n"
+        "\t-d,--output-directory\twhere to write the preprocessed files"
         "\n"
     , progname);
 }
@@ -37,7 +38,15 @@ void parse_args(int *argc, char ***argv, struct strbuf_list *entries_buffer)
             phelp();
         else if(!strcmp(**argv, "-s") || !strcmp(**argv, "--suppress-warns"))
             global_config.suppress_warns = 1;
-        else{
+        else if(!strcmp(**argv, "-d") || !strcmp(**argv, "--output-directory")){
+            if(*argc < 2)
+                die(LOG_ERROR("options", "missing value for %s"), **argv);
+            (*argv)++;
+            (*argc)--;
+            if(strlen(**argv) == 0)
+                die(LOG_ERROR("options", "output directory cannot be an empty string"));
+            global_config.output_dirname = **argv;
+        } else{
             // if first charachter in the current argument is -, its
             // probably a flag, because there is no file that start with this char
             if(***argv == '-')
@@ -58,13 +67,13 @@ text will be written to stdout
 */
 int run_on_stdin()
 {
-    char c;
     struct strbuf input = STRBUF_INIT;
+    char c;
 
     while((c = getchar()) != EOF)
         strbuf_append_char(&input, c);
 
-    preprocess_text(input.buf, &input.length);
+    preprocess_text("stdin", input.buf, &input.length);
     printf("%s", input.buf);
     strbuf_free(&input);
     return 0;

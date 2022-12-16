@@ -4,33 +4,29 @@
 #include "token.h"
 
 
-#define REGISTER_HANDLER(token_) { .token=#token_, .handler=token_ ## _handler }
-
-
-void define_handler()
-{
-    printf("Hello world\n");
-}
-
-
-static struct token_handler handlers[] = {
-    REGISTER_HANDLER(define),
+static struct token tokens[] = {
+    { .name="define", .handler=NULL, .type=TOKEN_TYPE_LINE  },
+    { .name="ifndef", .handler=NULL, .type=TOKEN_TYPE_BLOCK }
 };
 
 
-#define HANDLERS_COUNT sizeof(handlers) / sizeof(struct token_handler)
+#define TOKENS_LEN sizeof(tokens) / sizeof(struct token)
 
 
-void handle_token(const char *token)
+struct token *get_token(const char *token)
 {
-    struct token_handler *handler = NULL; 
+    struct token *current_token = NULL;
 
-    for(int i=0; i<HANDLERS_COUNT; i++){
-        handler = &handlers[i];
+    for(int i=0; i<TOKENS_LEN; i++){
+        current_token = &tokens[i];
 
-        if(!strcmp(token, handler->token)){
-            handler->handler();
-            return;
-        }
+        if(!strcmp(token, current_token->name))
+            return current_token;
     }
+    return NULL;
+}
+
+void handle_token(struct token *token, const char *line)
+{
+
 }

@@ -11,6 +11,7 @@
 struct config global_config = {
     .preprocess_char='#',
     .line_break_char='\\',
+    .output_dirname=OUTPUT_DIRNAME,
     .suppress_warns=0,
     .preignore=STRBUF_LIST_INIT,
 };

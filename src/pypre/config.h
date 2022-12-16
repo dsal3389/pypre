@@ -3,12 +3,15 @@
 
 #include "utils.h"
 
+
 #define PREIGNORE_FILENAME ".pypreignore"
+#define OUTPUT_DIRNAME "dist"
 
 
 struct config{
     char preprocess_char;
     char line_break_char;
+    char *output_dirname;
     int suppress_warns;
     struct strbuf_list preignore;
 };
