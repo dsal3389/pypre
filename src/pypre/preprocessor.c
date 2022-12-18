@@ -31,7 +31,8 @@ void merge_continued_lines(const char *filename, struct strbuf_list *lines)
     char *first_brk = NULL, *last_brk = NULL, merge_index = 0, *c = NULL;
     int should_merge = 1;
 
-    for(int i=0; i<lines->count; i++){
+    // going in reverse order on the lines, from bottom to top
+    for(int i=lines->count-1; i >= 0; i--){
         should_merge = 1;
         line = lines->strings[i];
 
@@ -102,7 +103,10 @@ OUT_C_LOOP:
         strbuf_delete(line, last_brk - line->buf, 1);
         next_line = lines->strings[i+1];
 
-        strbuf_append(line, next_line->buf);
+        // merge the next line (the line below) and deleted it from
+        // the lines list
+        if(next_line->length)
+            strbuf_append(line, next_line->buf);
         strbuf_list_remove(lines, i+1);
     }
 }
