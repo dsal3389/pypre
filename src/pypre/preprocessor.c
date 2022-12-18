@@ -28,7 +28,7 @@ static void __preprocess_entry(struct strbuf *entry_name, struct stat *estat)
 void merge_continued_lines(const char *filename, struct strbuf_list *lines)
 {
     struct strbuf *line = NULL, *next_line = NULL;
-    char *first_brk = NULL, *last_brk = NULL, merge_index = 0, *c = NULL;
+    char *first_brk = NULL, *last_brk = NULL, *c = NULL;
     int should_merge = 1;
 
     // going in reverse order on the lines, from bottom to top

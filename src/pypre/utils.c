@@ -133,8 +133,8 @@ void strbuf_replace(struct strbuf *strbuf, long index, const char *str)
     if(*replace_str != 0)
         replace_str_len = strlen(replace_str);
 
-    if((strbuf->capacity - strbuf->length) < (str_len - replace_str_len))
-        __strbuf_increase(strbuf, (str_len - replace_str_len));
+    if(str_len > replace_str_len)
+        __strbuf_increase(strbuf, str_len + 1);
 
     if(str_len > replace_str_len)
         strbuf->length += (str_len - replace_str_len);
@@ -142,7 +142,7 @@ void strbuf_replace(struct strbuf *strbuf, long index, const char *str)
         strbuf->length += (replace_str_len - str_len);
     
     // add extra one, to copy also the null terminator
-    strncpy(replace_str, str, str_len);
+    strncpy(replace_str, str, str_len + 1);
 }
 
 /* delete X chars from the given index on the strbuf */
