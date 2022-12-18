@@ -1,10 +1,7 @@
-#include <linux/limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <dirent.h>
 
 #include "preprocessor.h"
@@ -14,179 +11,116 @@
 #include "utils.h"
 
 
-static char *__mmap_file(const char *path, size_t size)
-{
-    int fd = open(path, O_RDWR);
-    char *content = NULL;
-
-    if(fd == -1)
-        die(LOG_ERRNO("open"));
-
-    content = (char *) safe_mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    close(fd);
-    return content;
-}
-
 static void __preprocess_entry(struct strbuf *entry_name, struct stat *estat)
 {
-    if(estat->st_mode & S_IFREG)
-        preprocess_file(entry_name, estat);
-    else if(estat->st_mode & S_IFLNK)
-        preprocess_file(entry_name, estat);
-    else if(estat->st_mode & S_IFDIR)
+    if(estat->st_mode & S_IFREG){
+        FILE *file = fopen(entry_name->buf, "r");
+        if(file == NULL)
+            die(LOG_ERRNO("open"));
+        preprocess_file(file, entry_name);
+        fclose(file);
+    } else if(estat->st_mode & S_IFDIR)
         preprocess_directory(entry_name, estat);
     else
         die(LOG_ERROR("process-entry", "failed to process entry, %s, maybe unsupported filetype"), entry_name->buf);
 }
 
-/*
-merge_continued_lines:
-this function convert lines with break char to a single line
-for example:
-    #define true\
-    # True
-
-converted to 
-    #define true True
-
-at this stage, we are not checking for errors or unexpected tokens
-*/
-void merge_continued_lines(const char *filename, char *content, size_t *size)
+void merge_continued_lines(const char *filename, struct strbuf_list *lines)
 {
-    char *tmp = NULL, *cptr = content;
-    size_t mmove_count = 0;
-    size_t lcount = 1;  // line count, for readable error messages
+    struct strbuf *line = NULL, *next_line = NULL;
+    char *first_brk = NULL, *last_brk = NULL, merge_index = 0, *c = NULL;
+    int should_merge = 1;
 
-BEGIN:
-    while(*cptr){
-        if(*cptr != global_config.line_break_char){
-            if(*cptr == '\n')
-                lcount++;
-            cptr++;
+    for(int i=0; i<lines->count; i++){
+        should_merge = 1;
+        line = lines->strings[i];
+
+        if(!line->length) continue;
+
+        if((first_brk=strchr(line->buf, global_config.line_break_char)) == NULL)
             continue;
+        
+        if((last_brk=strrchr(line->buf, global_config.line_break_char)) == NULL)
+            continue;
+        
+        // if first found brk char is not the same as last brk char it means
+        // we have such lines
+        // hell\o wo\rld\\,
+        // #define 
+        //
+        // we need to find a way to check if we need to merge the lines or
+        // its just an escape sequance
+        while(first_brk != last_brk){
+            if(*first_brk == global_config.line_break_char)
+                should_merge = !should_merge;
+            first_brk++;
         }
 
-        // if the current char is "\"" and the next char is also "\"
-        // it meants its an escape seqance "\\"
-        if(*(cptr + 1) == global_config.line_break_char){
-            cptr += 2;
+        if(!should_merge)
             continue;
-        }
 
-        // remember where we saw the link break, this will 
-        // help us later know from where to where delete chars
-        tmp = cptr;
-        cptr++;
-
-        // read until new line, if there is any unexpected
-        // charachter after the line break, die with an error message
-        while(*cptr != '\n'){
-            switch(*cptr){
+        // we validate that there arent any special chars after
+        // the line break, here is an example for a line that should not be merged
+        // print("hello world\n")
+        //
+        // there is a line break, but its an escape char \n, thats what
+        // we are checking here
+        c = last_brk+1;
+        while(*c){
+            switch(*c){
                 case ' ':
                 case '\t':
-                    cptr++;
+                    c++;
                     break;
                 default:
-                    // if we have unexpected char, then its probably a line 
-                    // with an escape char, for example "print('hello world\n')",
                     warn(
                         LOG_WARN(
-                            "%s", "\n\tunexpected char (%c) after line break on line %ld, not merging line\n"
-                        ), filename, *cptr, lcount
+                            "%s", "unexpected char (%c) after line break, ignoring and not merging line\n"
+                            " %d | %s\n"
+                        ), filename, *c, i, line->buf
                     );
-                    goto BEGIN;
+                    should_merge = 0;
+                    goto OUT_C_LOOP;
             }
         }
 
-        cptr++;
-        lcount++;
+OUT_C_LOOP:
+        if(!should_merge)
+            continue;
 
-        // if after the new line the first char is `global_config.preprocess_char`
-        // then we want to include it also in when we delete
-        // chars
-        if(*cptr == global_config.preprocess_char)
-            cptr++;
+        // if we need to merge this line, and there is no next line
+        // it means we are at the end of the file
+        if(i + 1 >= lines->count)
+            die(
+                LOG_ERROR(
+                    "%s", "unexpected line break at the end of the file\n"
+                    " > %d | %s\n"
+                ), filename, i+1, line->buf
+            );
 
+        // remove the break char from the current line
+        strbuf_delete(line, last_brk - line->buf, 1);
+        next_line = lines->strings[i+1];
 
-        // count how many bytes we need to move, by calculating
-        // how many chars we count so far and subtract it from the 
-        // current size, for example 15 - (0 - 10) = 5, + 1 for null terminator
-        mmove_count = *size - (cptr - content) + 1;
-
-        // update the size, what is the length of what we are trying
-        // to delete and add it to the size, for example
-        // 10 + (2 - 5) = 7
-        *size += tmp - cptr;
-
-        // delete all chars from where we found the line break
-        // up to the new line, this is the actual merge
-        memmove(tmp, cptr, mmove_count);
-        cptr = tmp;
+        strbuf_append(line, next_line->buf);
+        strbuf_list_remove(lines, i+1);
     }
 }
 
-void tokenize_and_parse_line(char *line)
+void preprocess_text(const char *filename, struct strbuf_list *lines)
 {
-    struct strbuf token_str = STRBUF_INIT;
-    struct token *token = NULL;
-    int preprocessor_line = 0;
-    char *track = line;
-
-    if((track=get_next_word(&token_str, track)) == NULL)
-        goto FUNC_END;
-    
-    if(*token_str.buf == global_config.preprocess_char){
-        strbuf_delete(&token_str, 0, 1);
-        preprocessor_line = 1;
-    }
-    
-    if(token_str.length == 0)
-        if((track=get_next_word(&token_str, track)) == NULL)
-            goto FUNC_END;
-    
-    if(get_token(token_str.buf) == NULL)
-        goto FUNC_END;
-
-    handle_token(token, line);
-
-FUNC_END:
-    strbuf_free(&token_str);
+    merge_continued_lines(filename, lines);
 }
 
-void preprocess_text(const char *filename, char *text, size_t *size)
+void preprocess_file(FILE *file, struct strbuf *filename)
 {
-    struct strbuf output_path = STRBUF_INIT;
-    merge_continued_lines(filename, text, size);
+    struct strbuf_list lines = STRBUF_LIST_INIT;
 
-    // create the output path string, the format should be like so
-    // ./<output dirname>/<filename>
-    strbuf_set(&output_path, "./");
-    strbuf_append(&output_path, global_config.output_dirname);
-    strbuf_append_char(&output_path, '/');
-    strbuf_append(&output_path, filename);
-
-    printf("output path %s (%ld)\n", output_path.buf, output_path.length);
-    char *line, *line_buffer, *ptr;
-    // we parse each line seperatly and pass it to a function
-    // that will tokenize and parse each word in the line
-    // for(ptr=text; ; ptr=NULL){
-    //     line = strtok_r(ptr, "\n", &line_buffer);
-    //     if(line == NULL)
-    //         break;
-
-    //     tokenize_and_parse_line(line);
-    // }
-    strbuf_free(&output_path);
-}
-
-void preprocess_file(struct strbuf *filename, struct stat *file_stat)
-{
-    char *fcontent = __mmap_file(filename->buf, file_stat->st_size);
-    size_t size = file_stat->st_size;
-
-    preprocess_text(filename->buf, fcontent, &size);
-    printf("%s:\n%s\n", filename->buf, fcontent);
-    munmap(fcontent, file_stat->st_size);
+    strbuf_list_from_file(&lines, file);
+    preprocess_text(filename->buf, &lines);
+    for(int i=0; i<lines.count; i++)
+        printf("%d | %s\n", i, lines.strings[i]->buf);
+    strbuf_list_free(&lines);
 }
 
 void preprocess_directory(struct strbuf *path, struct stat *dir_stat)
@@ -214,7 +148,7 @@ void preprocess_directory(struct strbuf *path, struct stat *dir_stat)
         if(
             !strcmp(dir_entry->d_name, ".") ||
             !strcmp(dir_entry->d_name, "..") ||
-            is_in_preignore(dir_entry->d_name)
+            should_be_ignored(dir_entry->d_name)
         )
             continue;
 

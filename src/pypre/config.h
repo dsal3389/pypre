@@ -18,7 +18,7 @@ struct config{
 
 
 extern struct config global_config;
-extern int is_in_preignore(const char *);
+extern int should_be_ignored(const char *);
 extern void config_init();
 
 

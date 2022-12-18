@@ -62,24 +62,6 @@ void parse_args(int *argc, char ***argv, struct strbuf_list *entries_buffer)
 }
 
 /*
-read data from stdin and parse the text, all the parsed
-text will be written to stdout
-*/
-int run_on_stdin()
-{
-    struct strbuf input = STRBUF_INIT;
-    char c;
-
-    while((c = getchar()) != EOF)
-        strbuf_append_char(&input, c);
-
-    preprocess_text("stdin", input.buf, &input.length);
-    printf("%s", input.buf);
-    strbuf_free(&input);
-    return 0;
-}
-
-/*
 run the preprocessor on the given entries, those entries
 can be files or directories
 */
@@ -113,9 +95,8 @@ int main(int argc, char **argv)
 
     // no files were passed to the program
     if(entry_names.count == 0)
-        results = run_on_stdin();
-    else
-        results = run_on_entries(&entry_names);
+        pusage();
+    results = run_on_entries(&entry_names);
 
     strbuf_list_free(&entry_names);
     return results;

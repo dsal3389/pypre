@@ -48,14 +48,14 @@ void __preignore()
     close(fd);
 }
 
-int is_in_preignore(const char *name)
+int should_be_ignored(const char *path)
 {
     struct strbuf * strbuf = NULL;
     
     for(int i=0; i<global_config.preignore.count; i++){
         strbuf = global_config.preignore.strings[i];
         
-        if(!strcmp(strbuf->buf, name))
+        if(!strcmp(strbuf->buf, path))
             return 1;
     }
     return 0;

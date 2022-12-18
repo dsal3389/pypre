@@ -1,6 +1,7 @@
 #ifndef _UTILS_H_
 #define _UTILS_H_ 1 
 
+#include <stdio.h>
 #include <stdlib.h>
 
 
@@ -22,7 +23,7 @@ struct strbuf_list{
     struct strbuf **strings;
 };
 
-
+extern void strbuf_from_file(struct strbuf *, FILE *);
 extern void strbuf_set(struct strbuf *, const char *);
 extern void strbuf_append(struct strbuf *, const char *);
 extern void strbuf_push(struct strbuf *, const char *);
@@ -32,9 +33,12 @@ extern void strbuf_replace(struct strbuf *, long, const char *);
 extern void strbuf_delete(struct strbuf *, size_t, size_t);
 extern void strbuf_free(struct strbuf *);
 
+extern void strbuf_list_from_file(struct strbuf_list *, FILE *);
 extern void strbuf_list_append(struct strbuf_list *, const char *);
+extern void strbuf_list_remove(struct strbuf_list *, size_t);
 extern void strbuf_list_free(struct strbuf_list *);
 
 extern char *get_next_word(struct strbuf *, char *);
+extern void create_directories(struct strbuf *);
 
 #endif
