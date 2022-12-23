@@ -33,29 +33,6 @@ static void __strbuf_list_increase(struct strbuf_list *strls, size_t size)
         strls->strings[strls->capacity - i] = (struct strbuf*) safe_calloc(1, sizeof(struct strbuf));
 }
 
-void strbuf_from_file(struct strbuf *strbuf, FILE *file)
-{
-    long fsize = 0, tmp = 0;
-    char buffer[256];
-
-    tmp = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    fseek(file, 0, SEEK_END);
-    fsize = ftell(file);
-
-    // go back to the original offset
-    fseek(file, tmp, SEEK_SET);
-
-    if(fsize >= strbuf->capacity)
-        __strbuf_increase(strbuf, fsize+1);
-    
-    while(fgets(buffer,  sizeof(buffer), file) != NULL)
-        strbuf_append(strbuf, buffer);
-
-    fread(strbuf->buf, sizeof(char), fsize, file);
-    strbuf->length = fsize;
-}
-
 /* set the strbuf value with the given string */
 void strbuf_set(struct strbuf *strbuf, const char *str)
 {
@@ -128,13 +105,16 @@ void strbuf_replace(struct strbuf *strbuf, long index, const char *str)
         
     size_t replace_str_len = 0;
     size_t str_len = strlen(str);
-    char *replace_str = &(strbuf->buf[index]);
+    char *replace_str = &strbuf->buf[index];
 
     if(*replace_str != 0)
         replace_str_len = strlen(replace_str);
 
-    if(str_len > replace_str_len)
-        __strbuf_increase(strbuf, str_len + 1);
+    if(
+        str_len > replace_str_len && 
+        (strbuf->capacity - strbuf->length) < (str_len - replace_str_len)
+    )
+        __strbuf_increase(strbuf, (str_len - replace_str_len));
 
     if(str_len > replace_str_len)
         strbuf->length += (str_len - replace_str_len);
@@ -242,74 +222,64 @@ void strbuf_list_remove(struct strbuf_list *strls, size_t index)
 /* free all the allocated memory for the strbuf_list and the strbuf strings */
 void strbuf_list_free(struct strbuf_list *strls)
 {
-    for(int i=0; i<strls->count; i++)
+    for(int i=0; i<strls->capacity; i++)
         strbuf_free(strls->strings[i]);
         
     strls->count = 0;
     strls->capacity = 0;
-    free(strls->strings);
+
+    if(strls->strings != NULL){
+        free(strls->strings);
+        strls->strings = NULL;
+    }
 }
 
-/*
-reads the first work in the given text and stores it into
-the buffer, the function returns a pointer to the end of the found word
-in the given text, usage example:
-
-    char line[] = "Hello world",
-    char *ptr = line;
-    struct strbuf word;
-
-    while(ptr != NULL){
-        ptr = get_next_word(&word, ptr);
-        printf("word %s\n", word->buf);
-    }
-*/
-char *get_next_word(struct strbuf *strbuf, char *text)
+void tokenize_string(struct strbuf_list *strls, struct strbuf *string)
 {
-    char *start = NULL, *end = text;
-    char tmp_c;
+    struct strbuf *current = NULL;
+    char *c = string->buf;
 
-    while(*end == ' '){
-        // if we didn't find any letter char until now, and we got to
-        // the end of the string, then it means the given text does not
-        // contain any word
-        if(*end == 0)
-            return NULL;
-        end++;
-    }
+    if(!string->length) return;
 
-    // record the start of the word
-    start = end;
-
-    // read until we meat a seperator, then it
-    // means we got to the end of the word
-    while(*end){
-        switch(*end){
-            case '\n':
-            case '\t':
-            case ' ':
-                goto LOOP_OUT;
-            default:
-                break;
+    for(; *c; c++){
+        if(strls->count >= strls->capacity)
+            __strbuf_list_increase(strls, 32);
+        current = strls->strings[strls->count];
+        
+        // group all spaces into a single token
+        if(*c == ' '){
+            do {
+                strbuf_append_char(current, *c++);
+            } while(*c == ' ');
+            
+            // we do c--, because the current char is not a space anymore,
+            // and the for loop will increase the char back
+            c--;
+            strls->count++;
+            continue;
         }
-        end++;
+        
+        // read a whole word as a single token
+        if(isalpha(*c) || *c == '_' || *c == '.'){
+            // read a whole word as a token
+            do {
+                strbuf_append_char(current, *c++);
+            } while(isalpha(*c) || *c == '_' || *c == '.');
+
+            c--;
+            strls->count++;
+            continue;
+        }
+
+        strbuf_append_char(current, *c);
+
+        // if current char is \ and the next char is a word
+        // it means this \ is an escape sequance, adding it
+        // as a single token
+        if(*c == '\\' && isalpha(*(c+1)))
+            strbuf_append_char(current, *++c);
+        strls->count++;
     }
-
-LOOP_OUT:
-    // remember the current end char for later,
-    // we set the null terminator so `strbuf_set` will only add the found
-    // word, after that we place the `tmp_c` back
-    tmp_c = *end;
-    *end = 0;
-    strbuf_set(strbuf, start);
-
-    // if the end of the word is NULL terminator, then
-    // it means we reached the end of the text
-    if(tmp_c == 0)
-        return NULL;
-
-    *end = tmp_c;
-    return end;
 }
 
 void create_directories(struct strbuf *path)

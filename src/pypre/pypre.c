@@ -96,8 +96,8 @@ int main(int argc, char **argv)
     // no files were passed to the program
     if(entry_names.count == 0)
         pusage();
+        
     results = run_on_entries(&entry_names);
-
     strbuf_list_free(&entry_names);
     return results;
 }

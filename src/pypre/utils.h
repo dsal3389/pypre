@@ -23,7 +23,7 @@ struct strbuf_list{
     struct strbuf **strings;
 };
 
-extern void strbuf_from_file(struct strbuf *, FILE *);
+
 extern void strbuf_set(struct strbuf *, const char *);
 extern void strbuf_append(struct strbuf *, const char *);
 extern void strbuf_push(struct strbuf *, const char *);
@@ -38,7 +38,7 @@ extern void strbuf_list_append(struct strbuf_list *, const char *);
 extern void strbuf_list_remove(struct strbuf_list *, size_t);
 extern void strbuf_list_free(struct strbuf_list *);
 
-extern char *get_next_word(struct strbuf *, char *);
+extern void tokenize_string(struct strbuf_list *, struct strbuf *);
 extern void create_directories(struct strbuf *);
 
 #endif

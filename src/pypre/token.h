@@ -1,3 +1,4 @@
+#include "utils.h"
 #ifndef _TOKEN_H_ 
 #define _TOKEN_H_ 1
 
@@ -13,7 +14,7 @@ struct token {
 };
 
 
-extern struct token *get_token(const char *);
+extern struct token *get_token(struct strbuf_list *);
 extern void handle_token(struct token *, const char *);
 
 

@@ -9,43 +9,21 @@
 
 
 struct config global_config = {
-    .preprocess_char='#',
+    .preprocess_char="#",
     .line_break_char='\\',
     .output_dirname=OUTPUT_DIRNAME,
     .suppress_warns=0,
     .preignore=STRBUF_LIST_INIT,
 };
 
-
-void __preignore_text(char *text)
-{
-    char *ptr = NULL, *line = NULL;
-
-    for(ptr=text; ; ptr=NULL){
-        line = strtok(ptr, "\n");
-        if(line == NULL)
-            break;
-            
-        strbuf_list_append(&global_config.preignore, line);
-    }
-}
-
 void __preignore()
 {
-    int fd = open(PREIGNORE_FILENAME, O_RDONLY);
-    char *preignore_text;
+    printf("should\n");
+    FILE *preignore = fopen(PREIGNORE_FILENAME, "r");
 
-    if(fd != -1){
-        off_t fsize = lseek(fd, 0, SEEK_END);
-
-        if(fsize){
-            preignore_text = mmap(NULL, fsize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-            __preignore_text(preignore_text);
-            munmap(preignore_text, fsize);
-        }
-    } 
-
-    close(fd);
+    if(preignore == NULL) return;
+    strbuf_list_from_file(&global_config.preignore, preignore);
+    fclose(preignore);
 }
 
 int should_be_ignored(const char *path)

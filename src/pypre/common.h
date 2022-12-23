@@ -7,13 +7,14 @@
 #include <errno.h>
 
 #include "config.h"
+#include "ansi.h"
 
 
-#define LOG_FORMAT(prefix, type, message) prefix ": " type ": " message "\n"
-#define LOG_ERROR(prefix, message) LOG_FORMAT(prefix, "error", message)
-#define LOG_ERRNO(prefix) LOG_ERROR(prefix, "%s"), strerror(errno)
-#define LOG_WARN(prefix, message) LOG_FORMAT(prefix, "warning", message)
+#define LOG_FORMAT(prefix, type, message) ANSI_BOLD_TEXT(prefix) ": " type ": " message "\n"
+#define LOG_ERROR(prefix, message) LOG_FORMAT(prefix, ANSI_COLOR_TEXT(RED, "error"), message)
+#define LOG_WARN(prefix, message) LOG_FORMAT(prefix, ANSI_COLOR_TEXT(BRIGHT_YELLOW, "warning"), message)
 #define LOG_NOTE(prefix, message) LOG_FORMAT(prefix, "note", message)
+#define LOG_ERRNO(prefix) LOG_ERROR(prefix, "%s"), strerror(errno)
 
 #define eprintf(...) fprintf(stderr, __VA_ARGS__)
 

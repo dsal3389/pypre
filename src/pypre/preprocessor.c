@@ -111,9 +111,32 @@ OUT_C_LOOP:
     }
 }
 
+void tokenize_and_parse(const char *filename, struct strbuf_list *lines)
+{
+    struct strbuf_list line_tokens = STRBUF_LIST_INIT;
+    struct strbuf *line = NULL;
+    int i = 0;
+
+    for(; i<lines->count; i++){
+        line = lines->strings[i];
+
+        tokenize_string(&line_tokens, line);
+
+        // line doesn't contain any tokens, probably empty line
+        if(!line_tokens.count)
+            continue;
+
+        get_token(&line_tokens);
+        strbuf_list_free(&line_tokens);
+    }
+
+    strbuf_list_free(&line_tokens);
+}
+
 void preprocess_text(const char *filename, struct strbuf_list *lines)
 {
     merge_continued_lines(filename, lines);
+    tokenize_and_parse(filename, lines);
 }
 
 void preprocess_file(FILE *file, struct strbuf *filename)
@@ -122,8 +145,6 @@ void preprocess_file(FILE *file, struct strbuf *filename)
 
     strbuf_list_from_file(&lines, file);
     preprocess_text(filename->buf, &lines);
-    for(int i=0; i<lines.count; i++)
-        printf("%d | %s\n", i, lines.strings[i]->buf);
     strbuf_list_free(&lines);
 }
 

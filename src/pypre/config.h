@@ -9,9 +9,9 @@
 
 
 struct config{
-    char preprocess_char;
-    char line_break_char;
+    char *preprocess_char;
     char *output_dirname;
+    char line_break_char;
     int suppress_warns;
     struct strbuf_list preignore;
 };

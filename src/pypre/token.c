@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "config.h"
 #include "token.h"
+#include "utils.h"
 
 
 static struct token tokens[] = {
@@ -10,23 +12,18 @@ static struct token tokens[] = {
 };
 
 
-#define TOKENS_LEN sizeof(tokens) / sizeof(struct token)
-
-
-struct token *get_token(const char *token)
+struct token *get_token(struct strbuf_list *tokenized_line)
 {
-    struct token *current_token = NULL;
+    const struct strbuf *token = NULL;
+    int i = 0, j = 0;
 
-    for(int i=0; i<TOKENS_LEN; i++){
-        current_token = &tokens[i];
+    for(; i<tokenized_line->count; i++){
+        token = tokenized_line->strings[i];
 
-        if(!strcmp(token, current_token->name))
-            return current_token;
+        if(!strcmp(token->buf, global_config.preprocess_char))
+            printf("preprocess char\n");
     }
+
     return NULL;
 }
 
-void handle_token(struct token *token, const char *line)
-{
-
-}
