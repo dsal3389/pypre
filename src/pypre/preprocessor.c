@@ -126,15 +126,15 @@ void tokenize_and_parse(const char *filename, struct strbuf_list *lines)
         if(!line_tokens.count)
             continue;
 
-        get_token(&line_tokens);
-        strbuf_list_free(&line_tokens);
+        //get_token(&line_tokens);
+        //strbuf_list_free(&line_tokens);
     }
-
-    strbuf_list_free(&line_tokens);
 }
 
 void preprocess_text(const char *filename, struct strbuf_list *lines)
 {
+    for(int i=0; i<lines->count; i++)
+        printf("%d | %s\n", i, lines->strings[i]->buf);
     merge_continued_lines(filename, lines);
     tokenize_and_parse(filename, lines);
 }

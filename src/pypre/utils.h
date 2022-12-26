@@ -39,6 +39,5 @@ extern void strbuf_list_remove(struct strbuf_list *, size_t);
 extern void strbuf_list_free(struct strbuf_list *);
 
 extern void tokenize_string(struct strbuf_list *, struct strbuf *);
-extern void create_directories(struct strbuf *);
 
 #endif

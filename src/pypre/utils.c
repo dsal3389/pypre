@@ -26,11 +26,12 @@ static void __strbuf_increase(struct strbuf *strbuf, size_t size)
 
 static void __strbuf_list_increase(struct strbuf_list *strls, size_t size)
 {
+
     strls->capacity += size;
     strls->strings = safe_realloc(strls->strings, strls->capacity*sizeof(void*));
 
-    for(int i=size; i; i--)
-        strls->strings[strls->capacity - i] = (struct strbuf*) safe_calloc(1, sizeof(struct strbuf));
+    for(int i=0; i<size; i++)
+        strls->strings[strls->capacity - i - 1] = (struct strbuf*) safe_calloc(1, sizeof(struct strbuf));
 }
 
 /* set the strbuf value with the given string */
@@ -158,12 +159,12 @@ void strbuf_list_from_file(struct strbuf_list *strls, FILE *file)
     char buffer[256];
     int line_length = 0, is_new_line = 0;
 
-    while(fgets(buffer, sizeof(buffer)-1, file) != NULL){
+    if(strls->count >= strls->capacity)
+        __strbuf_list_increase(strls, 32);
+
+    while(fgets(buffer, sizeof(buffer), file) != NULL){
         is_new_line = 0;
         line_length = strlen(buffer);
-
-        if(strls->count >= strls->capacity)
-            __strbuf_list_increase(strls, 32);
 
         if(buffer[line_length-1] == '\n'){
             is_new_line = 1;
@@ -181,12 +182,12 @@ void strbuf_list_from_file(struct strbuf_list *strls, FILE *file)
 LOOP_END:
         if(is_new_line)
             strls->count++;
+
+        if(strls->count >= strls->capacity)
+            __strbuf_list_increase(strls, 32);
     }
 
-    // we should add to the count 1, because we start from 0,
-    // so if for example a file with 1 line, the strls->count will be 0, 
-    // because there was only 1 line
-    if(strls->count)
+    if(!is_new_line)
         strls->count++;
 }
 
@@ -282,30 +283,3 @@ void tokenize_string(struct strbuf_list *strls, struct strbuf *string)
     }
 }
 
-void create_directories(struct strbuf *path)
-{
-    struct strbuf current_dir = STRBUF_INIT;
-    char path_buffer[path->length];
-    char *path_ptr = path_buffer, *dirname = NULL;
-
-    strncpy(path_buffer, path->buf, path->length + 1);
-    
-    if(!strncmp(path_ptr, "./", 2)){
-        strbuf_append(&current_dir, "./");
-        path_ptr += 2;
-    }
-
-    for(;; path_ptr=NULL){
-        dirname = strtok(path_ptr, "/");
-        if(dirname == NULL)
-            break;
-
-        strbuf_append(&current_dir, dirname);
-        strbuf_append_char(&current_dir, '/');
-        printf("%s\n", current_dir.buf);
-
-        mkdir(current_dir.buf, 0777);
-    }
-
-    strbuf_free(&current_dir);
-}

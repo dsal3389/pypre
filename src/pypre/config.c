@@ -18,7 +18,6 @@ struct config global_config = {
 
 void __preignore()
 {
-    printf("should\n");
     FILE *preignore = fopen(PREIGNORE_FILENAME, "r");
 
     if(preignore == NULL) return;
